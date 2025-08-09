@@ -2,3 +2,4 @@ django_venv/
 *.env
 *.pyc
 *db.sqlite3
+*__pycache__/
