@@ -1,30 +1,39 @@
-from django.shortcuts import render
-from django.http import HttpResponse
+from django.shortcuts import render, redirect
+from django.conf import settings
 import jwt
 import os
 from dotenv import load_dotenv
 
-# Load .env file
 load_dotenv()
 
-# Metabase configuration using environment variables
 METABASE_SITE_URL = os.getenv("METABASE_SITE_URL")
 METABASE_SECRET_KEY = os.getenv("METABASE_SECRET_KEY")
 
-# Helper function to generate JWT token
 def get_token(payload):
-    return jwt.encode(payload, METABASE_SECRET_KEY, algorithm="HS256")
+    token = jwt.encode(payload, METABASE_SECRET_KEY, algorithm="HS256")
+    if isinstance(token, bytes):
+        return token.decode('utf-8')
+    return token
 
-# Affiliate dashboard view
 def affiliate_dashboard(request, affiliate_name):
-    # Define payload for Metabase based on the affiliate_name
+    if not request.user.is_authenticated:
+        return redirect(f"{settings.LOGIN_URL}?next={request.path}")
+
+    # Normalize logged in user's affiliate name (e.g. username 'mary_osei' -> 'Mary Osei')
+    logged_in_affiliate_name = request.user.username.replace('_', ' ').title()
+
+    # Check if the requested affiliate_name matches the logged-in user's affiliate_name
+    if affiliate_name != logged_in_affiliate_name:
+        return redirect(f"{settings.LOGIN_URL}?next={request.path}")  # Make the user to login again
+
     payload = {
-        "resource": {"dashboard": 2},  # Dashboard ID
+        "resource": {"dashboard": 2},
         "params": {
-            "affiliate": [affiliate_name]  # Pass the affiliate name to the dashboard
+            "affiliate": affiliate_name
         }
     }
-    iframeUrl = METABASE_SITE_URL + "/embed/dashboard/" + get_token(payload) + "#bordered=true&titled=true"
 
-    # Render the dashboard with the correct iframe URL
+    token = get_token(payload)
+    iframeUrl = f"{METABASE_SITE_URL}/embed/dashboard/{token}#bordered=true&titled=true"
+
     return render(request, 'affiliate_dashboard.html', {'iframeUrl': iframeUrl})
